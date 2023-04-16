@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ssd1306-driver.h"
+#include <math.h>
+#include "ssd1306-driver.h" 
+#include "position-calc.h"
 
 #include "hardware/i2c.h"
 
@@ -17,22 +19,27 @@ uint32_t i2c_disp_write (uint8_t addr, const uint8_t* data, uint32_t size) {
 void draw_x_y_z (float x, float y, float z, float temp, uint32_t ok, uint32_t count) {
     memset(*(ssd1306_ctx.buf), 0, SSD1306_BUFSIZE);
 
+    angles_t ang;
+    accels_t acc;
+
+    acc.x = x;
+    acc.y = y;
+    acc.z = z;
+
+    position_accel_to_deg(acc, &ang);
 
     char sbuf[16];
-    sprintf(sbuf, "X=%.1f", x);
+    sprintf(sbuf, "%.1f ROLL", ang.alpha);
     ssd1306_string(&ssd1306_ctx, sbuf, 0, 0);
 
-    sprintf(sbuf, "Y=%.1f", y);
+    sprintf(sbuf, "%.1f PITCH", ang.beta);
     ssd1306_string(&ssd1306_ctx, sbuf,  0, 12);
 
-    sprintf(sbuf, "Z=%.1f", z);
-    ssd1306_string(&ssd1306_ctx, sbuf,  0, 23);
+    // sprintf(sbuf, "G=%.1f", ang.gamma);
+    // ssd1306_string(&ssd1306_ctx, sbuf,  0, 23);
 
     sprintf(sbuf, "T=%.1f", temp);
-    ssd1306_string(&ssd1306_ctx, sbuf, 64, 0);
-
-    itoa(ok, sbuf, 10);
-    ssd1306_string(&ssd1306_ctx, sbuf, 64, 12);
+    ssd1306_string(&ssd1306_ctx, sbuf, 0, 23);
 
     itoa(count, sbuf, 10);
     ssd1306_string(&ssd1306_ctx, sbuf, 64, 23);
@@ -122,7 +129,7 @@ int main (){
 
         count++;
 
-        uint32_t ac_div = 8*2048 / 9.8;
+        uint32_t ac_div = 8*2048;
 
         sleep_ms(5);
         draw_x_y_z((float)acceleration[0] / ac_div, (float)acceleration[1] / ac_div, (float)acceleration[2] / ac_div, ((float)temp / 340.0) + 36.53, buffer[0], count);
