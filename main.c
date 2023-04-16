@@ -11,38 +11,36 @@
 ssd1306_ctx_t ssd1306_ctx;
 uint8_t data[SSD1306_BUFSIZE];
 
+position_t position;
+
 uint32_t i2c_disp_write (uint8_t addr, const uint8_t* data, uint32_t size) {
     
     return i2c_write_blocking (i2c_default, addr, data, size, false);
 }
 
-void draw_x_y_z (float x, float y, float z, float temp, uint32_t ok, uint32_t count) {
+void draw_x_y_z (accels_t acc, gyro_t gyr, float temp, uint32_t ok, uint64_t count) {
     memset(*(ssd1306_ctx.buf), 0, SSD1306_BUFSIZE);
 
     angles_t ang;
-    accels_t acc;
 
-    acc.x = x;
-    acc.y = y;
-    acc.z = z;
-
-    position_accel_to_deg(acc, &ang);
+    position_step (&position, acc, gyr, count);
+    position_get_deg(&position, &ang);
 
     char sbuf[16];
-    sprintf(sbuf, "%.1f ROLL", ang.alpha);
+    sprintf(sbuf, "%.1f ROLL", ang.roll);
     ssd1306_string(&ssd1306_ctx, sbuf, 0, 0);
 
-    sprintf(sbuf, "%.1f PITCH", ang.beta);
+    sprintf(sbuf, "%.1f PITCH", ang.pitch);
     ssd1306_string(&ssd1306_ctx, sbuf,  0, 12);
 
     // sprintf(sbuf, "G=%.1f", ang.gamma);
     // ssd1306_string(&ssd1306_ctx, sbuf,  0, 23);
 
-    sprintf(sbuf, "T=%.1f", temp);
+    sprintf(sbuf, "%.1f YAW", ang.yaw);
     ssd1306_string(&ssd1306_ctx, sbuf, 0, 23);
 
-    itoa(count, sbuf, 10);
-    ssd1306_string(&ssd1306_ctx, sbuf, 64, 23);
+    itoa(count / 1000000, sbuf, 10);
+    ssd1306_string(&ssd1306_ctx, sbuf, 88, 0);
 
     ssd1306_render(&ssd1306_ctx);
 }
@@ -119,20 +117,35 @@ int main (){
 
     uint32_t count = 0;
 
+    angles_t ang;
+    accels_t acc;
+    gyro_t gyr;
+
     while (1) {
-        mpu6050_read_raw(acceleration, gyro, &temp);
 
         uint8_t val = 0x75;
         uint8_t buffer[3] = {0};
         i2c_write_blocking(i2c_default, 0x68, &val, 1, true);
         i2c_read_blocking(i2c_default, 0x68, buffer, 1, false); 
 
-        count++;
+        mpu6050_read_raw(acceleration, gyro, &temp);
 
         uint32_t ac_div = 8*2048;
 
+        acc.x = (float)acceleration[0] / ac_div;
+        acc.y = (float)acceleration[1] / ac_div;
+        acc.z = (float)acceleration[2] / ac_div;
+
+        uint32_t gy_div = 131;
+
+        gyr.x = (float)gyro[0] / gy_div * M_PI / 180;
+        gyr.y = (float)gyro[1] / gy_div * M_PI / 180;
+        gyr.z = (float)gyro[2] / gy_div * M_PI / 180;
+
+        count++;
+
         sleep_ms(5);
-        draw_x_y_z((float)acceleration[0] / ac_div, (float)acceleration[1] / ac_div, (float)acceleration[2] / ac_div, ((float)temp / 340.0) + 36.53, buffer[0], count);
-        sleep_ms(100);
+        draw_x_y_z(acc, gyr, ((float)temp / 340.0) + 36.53, buffer[0], time_us_64());
+        sleep_ms(50);
     }
 }
